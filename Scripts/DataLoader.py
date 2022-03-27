@@ -187,6 +187,5 @@ class ship_dataset:
         _input = torch.from_numpy(np.asarray(_input))
 
         _output = torch.from_numpy(np.asarray(_output))
-
+        # RESCALING DO HERE
         return (_input, _output, _sample_path)               
-        
