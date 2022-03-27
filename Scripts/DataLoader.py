@@ -182,5 +182,5 @@ class ship_dataset:
         _sample_path = self.data_list[ndx]
                            
         _input, _output = get_data_sample(_sample_path)
-                           
+        # Change _input and _output to tensors              
         print(_input, _output, _sample_path)               
