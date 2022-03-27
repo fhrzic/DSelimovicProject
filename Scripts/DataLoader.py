@@ -10,6 +10,7 @@ import diskcache
 import pickle
 import zlib
 import numpy as np
+import torch
 
 # Cache function
 # Cashing
@@ -182,5 +183,10 @@ class ship_dataset:
         _sample_path = self.data_list[ndx]
                            
         _input, _output = get_data_sample(_sample_path)
-        # Change _input and _output to tensors              
-        print(_input, _output, _sample_path)               
+
+        _input = torch.from_numpy(np.asarray(_input))
+
+        _output = torch.from_numpy(np.asarray(_output))
+
+        return (_input, _output, _sample_path)               
+        
