@@ -130,3 +130,5 @@ dmypy.json
 
 # Dirs
 Dataset/
+data-cache/
+__pycache__
