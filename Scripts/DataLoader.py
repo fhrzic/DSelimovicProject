@@ -125,13 +125,13 @@ class Data:
     def get_sample(self):
         # Return data
         
-        _heave = np.array(self.data['input']['heave'])
-        _pitch = np.array(self.data['input']['pitch'])
-        _roll = np.array(self.data['input']['roll'])
+        _heave = np.array(self.data['input']['heave']) / 20.0
+        _pitch = np.array(self.data['input']['pitch']) / 20.0
+        _roll = np.array(self.data['input']['roll']) / 20.0
                            
-        _hs = np.array(self.data['output']['Hs'])
-        _tz = np.array(self.data['output']['Tz'])
-        _dp = np.array(self.data['output']['Dp'])
+        _hs = np.array(self.data['output']['Hs']) / 15.0
+        _tz = np.array(self.data['output']['Tz']) / 15.0
+        _dp = np.array(self.data['output']['Dp']) / 360.0
                            
         return ((_heave, _pitch, _roll), (_hs, _tz, _dp))
 
@@ -187,5 +187,11 @@ class ship_dataset:
         _input = torch.from_numpy(np.asarray(_input))
 
         _output = torch.from_numpy(np.asarray(_output))
+
+        _input = _input.to(torch.float64)
+        _input = _input.unsqueeze(0)
+
+        
+
         # RESCALING DO HERE
         return (_input, _output, _sample_path)               
