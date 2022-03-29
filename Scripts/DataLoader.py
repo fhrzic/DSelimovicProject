@@ -11,6 +11,7 @@ import pickle
 import zlib
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
 
 # Cache function
 # Cashing
@@ -191,7 +192,27 @@ class ship_dataset:
         _input = _input.to(torch.float64)
         _input = _input.unsqueeze(0)
 
-        
-
-        # RESCALING DO HERE
         return (_input, _output, _sample_path)               
+
+# Generate dataloader
+def init_dataloader(root_data_dir = None, data_set = 'train', use_gpu = False, num_workers = 1, batch_size = 32):
+    """
+        Init of the  data loader. NOT TESTED FOR MULTIPLE GPU
+        Creating wrapper arround data class. 
+
+        ARGS:
+            * root_data_dir, str, path to data
+            * data_set, str, which data set to use (train, valid, test)
+            * batch_size, int, size of the batch
+            * use_gpu, boolean, if gpu used
+            * num_wokers, int, number of workers for data loading
+    """
+    _ds = ship_dataset(root_data_dir, data_set)
+
+    _dl = DataLoader(
+        _ds,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        pin_memory=use_gpu,
+    )  
+    return _dl
