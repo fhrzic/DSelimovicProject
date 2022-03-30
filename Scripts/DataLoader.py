@@ -12,6 +12,14 @@ import zlib
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from collections import namedtuple
+
+# Named tupple class
+data_params = namedtuple(
+    'data_params',
+    'root_dir, dataset, use_gpu, num_workers, batch_size',
+)
+
 
 # Cache function
 # Cashing
@@ -195,7 +203,7 @@ class ship_dataset:
         return (_input, _output, _sample_path)               
 
 # Generate dataloader
-def init_dataloader(root_data_dir = None, data_set = 'train', use_gpu = False, num_workers = 1, batch_size = 32):
+def init_dataloader(dataset_params):
     """
         Init of the  data loader. NOT TESTED FOR MULTIPLE GPU
         Creating wrapper arround data class. 
@@ -207,12 +215,12 @@ def init_dataloader(root_data_dir = None, data_set = 'train', use_gpu = False, n
             * use_gpu, boolean, if gpu used
             * num_wokers, int, number of workers for data loading
     """
-    _ds = ship_dataset(root_data_dir, data_set)
+    _ds = ship_dataset(dataset_params.root_dir, dataset_params.dataset)
 
     _dl = DataLoader(
         _ds,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        pin_memory=use_gpu,
+        batch_size = dataset_params.batch_size,
+        num_workers = dataset_params.num_workers,
+        pin_memory = dataset_params.use_gpu,
     )  
     return _dl
