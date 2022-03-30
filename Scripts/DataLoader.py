@@ -178,6 +178,9 @@ class ship_dataset:
         
         # Number of samples
         self.samples_cnt = len(self.data_list)
+
+        # Size of the batch
+        self.batch_size = dataset_batch_size
         
     def shuffle_samples(self):
          # Shuffeling dataset
