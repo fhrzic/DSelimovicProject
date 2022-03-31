@@ -265,6 +265,6 @@ class ship_training_app:
                     _best_epoch = _epoch
             
             # Early stopping
-            if _epoch - _best_epoch  > self.model_params.valid_epochs * 3:
+            if _epoch - _best_epoch  > self.model_params.valid_epochs * 7:
                 print(f"Early stopping at epoch: {_epoch}")
                 break
