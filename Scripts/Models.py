@@ -1,3 +1,4 @@
+from numpy import float32
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -12,16 +13,17 @@ class CNN_REG(nn.Module):
         * Max Pooling ratio is uknown so it is make customable
         * Input size is based on ship_dataset and is set to 1501
     """
-    def __init__(self, max_pooling_ratio = 2):
+    def __init__(self, max_pooling_ratio = 2, scaler = 1):
         super(CNN_REG, self).__init__()
         # Calculating number of neurons after the convolutions and max pooling
         self.dense_number = math.floor((math.floor((1501-15+1) / max_pooling_ratio) - 9 + 1) / max_pooling_ratio)
         self.max_pooling_ratio = max_pooling_ratio
 
         # Layers definition
-        self.first_conv = torch.nn.Conv2d(1, 48, kernel_size = (3, 15))
-        self.second_conv = torch.nn.Conv2d(48, 48, kernel_size = (1,9))
-        self.dense = torch.nn.Linear(self.dense_number * 48, 30)
+        self.scaler = scaler
+        self.first_conv = torch.nn.Conv2d(1, 48 * self.scaler, kernel_size = (3, 15))
+        self.second_conv = torch.nn.Conv2d(48 * self.scaler, 48 * self.scaler, kernel_size = (1,9))
+        self.dense = torch.nn.Linear(self.dense_number * 48 * self.scaler, 30)
         self.dropout = nn.Dropout(p=0.25)
         self.output_layer = torch.nn.Linear(30, 3)
         
@@ -35,11 +37,10 @@ class CNN_REG(nn.Module):
         _out = F.max_pool2d(_out, kernel_size = (1, self.max_pooling_ratio))
         
         # Flatten
-        _out = _out.view(-1, self.dense_number * 48)
+        _out = _out.view(-1, self.dense_number * 48 * self.scaler)
         _out = self.dense(_out)
         _out = torch.tanh(_out)
         _out = self.dropout(_out)
         _out = self.output_layer(_out)
-        _out = torch.tanh(_out)
-        
+        _out = torch.tanh(_out)        
         return _out
