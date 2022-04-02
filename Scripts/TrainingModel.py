@@ -3,6 +3,8 @@ import torch
 from Models import *
 import numpy as np
 import datetime
+import pandas as pd
+import xlsxwriter
 
 model_params = namedtuple(
     'model_params',
@@ -34,17 +36,45 @@ class ship_training_app:
         
         self.mse_loss = torch.nn.MSELoss(reduction = 'none')
         self.mae_loss = torch.nn.L1Loss(reduction = 'none')
+
+        # Results
+                # Set savers
+        self.training_results_dict = {
+            'epoch': [],
+            'mse_general': [],
+            'mae_general': [],
+            'mse_Hs': [],
+            'mse_Tz': [],
+            'mse_Dp': [],
+            'mae_Hs': [],
+            'mae_Tz': [],
+            'mae_Dp': [],
+        }
+
+        self.validation_results_dict = {
+            'epoch': [],
+            'mse_general': [],
+            'mae_general': [],
+            'mse_Hs': [],
+            'mse_Tz': [],
+            'mse_Dp': [],
+            'mae_Hs': [],
+            'mae_Tz': [],
+            'mae_Dp': [],
+        }
         
     def init_models(self):
 
         assert self.model_params.name in ["CNN_REG"], f"Wrong model name, got: {self.model_params.name}"
+
+        print(f"USING MODEL: {self.model_params.name}")
 
         if self.model_params.name == "CNN_REG":
             _model = CNN_REG(max_pooling_ratio = self.model_params.max_pooling_rate, 
             scaler = self.model_params.scaler)
         
         if self.model_params.gpu:
-            print(f"USING GPU:{self.device}")
+            print(f"USING GPU: {self.device}")
             _model = _model.to(self.device)
         return _model
     
@@ -53,6 +83,8 @@ class ship_training_app:
             Init optimizer: Feel free to add other optmizers. UPGRADE: optimizer as param
             self.lr = 0.06 0.03
         """
+        print(f"USING OPTIMIZER: {self.model_params.opt_name} / LR:{self.model_params.learning_rate}")
+    
         assert self.model_params.opt_name in ["SGD", "ADAM"], f"Wrong optimizer name, got: {self.model_params.opt_name}"
 
         if self.model_params.opt_name == 'SGD':
@@ -222,6 +254,54 @@ class ship_training_app:
             print('Saving best model!')
             torch.save(_state, 'best_model-true.pth')
 
+    def save_metrics(self, epoch, metrics, mode):
+        """
+        function to populate metrics dict
+        """
+        # Transfer metrics to CPU
+        _metrics = metrics.to('cpu')
+        _metrics = _metrics.detach().numpy()
+
+        if mode == 'Train':
+            self.training_results_dict['epoch'].append(epoch)
+            self.training_results_dict['mse_general'].append(np.mean(_metrics[0]))
+            self.training_results_dict['mae_general'].append(np.mean(_metrics[1]))
+            self.training_results_dict['mse_Hs'].append(np.mean(_metrics[2]))
+            self.training_results_dict['mse_Tz'].append(np.mean(_metrics[3]))
+            self.training_results_dict['mse_Dp'].append(np.mean(_metrics[4]))
+            self.training_results_dict['mae_Hs'].append(np.mean(_metrics[5]))
+            self.training_results_dict['mae_Tz'].append(np.mean(_metrics[6]))
+            self.training_results_dict['mae_Dp'].append(np.mean(_metrics[7]))
+        
+        if mode == 'Valid':
+            self.validation_results_dict['epoch'].append(epoch)
+            self.validation_results_dict['mse_general'].append(np.mean(_metrics[0]))
+            self.validation_results_dict['mae_general'].append(np.mean(_metrics[1]))
+            self.validation_results_dict['mse_Hs'].append(np.mean(_metrics[2]))
+            self.validation_results_dict['mse_Tz'].append(np.mean(_metrics[3]))
+            self.validation_results_dict['mse_Dp'].append(np.mean(_metrics[4]))
+            self.validation_results_dict['mae_Hs'].append(np.mean(_metrics[5]))
+            self.validation_results_dict['mae_Tz'].append(np.mean(_metrics[6]))
+            self.validation_results_dict['mae_Dp'].append(np.mean(_metrics[7]))
+
+    def export_metrics_to_xlsx(self, best_epoch, best_score):
+        """
+        Function that exports model's training and validation metrics to dictionary
+        """
+        
+        # Generate writer for a given model
+        if self.model_params.name == 'CNN_REG':
+            _writer = pd.ExcelWriter(f"{self.model_params.name}:{self.model_params.max_pooling_rate}:{self.model_params.scaler}_{self.model_params.opt_name}" +  
+                f":{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine = 'xlsxwriter')
+        
+        # Generate dataframes
+        _df_train = pd.DataFrame.from_dict(self.training_results_dict)
+        _df_valid = pd.DataFrame.from_dict(self.validation_results_dict)
+
+        _df_train.to_excel(_writer, sheet_name="Training", index = False)
+        _df_valid.to_excel(_writer, sheet_name="Validation", index = False)
+        _writer.save() 
+
     def load_model(self, path):
         """
             Function that loads model.
@@ -245,7 +325,6 @@ class ship_training_app:
             Main train function.
         """
         print(f"Starting training {self}")
-           
             
         # Set score 
         _best_score = 1000.0
@@ -257,6 +336,8 @@ class ship_training_app:
             _metrics = self.train_model(self.train_dl)
             self.eval_metrics(_epoch, _metrics, 'Train')
             self.save_model(_epoch, best = False)
+            self.save_metrics(_epoch, _metrics, 'Train')
+
             
             # Validation
             if _epoch == 1 or _epoch % self.model_params.valid_epochs == 0:
@@ -264,8 +345,9 @@ class ship_training_app:
                 print("*************")
                 _mse = self.eval_metrics(_epoch, _metrics, 'Valid')
                 print("*************")
-
+                self.save_metrics(_epoch, _metrics, 'Valid')
                 _mse = np.mean(_mse)
+
                 if _epoch == 1 or ( _mse < _best_score):
                     self.save_model(_epoch, best = True)
                     _best_score = _mse
@@ -275,3 +357,11 @@ class ship_training_app:
             if _epoch - _best_epoch  > self.model_params.valid_epochs * 7:
                 print(f"Early stopping at epoch: {_epoch}")
                 break
+        
+        # Save metrics
+        self.export_metrics_to_xlsx(_best_epoch, _best_score)
+
+        # Release memory
+        torch.cuda.empty_cache()
+
+        
