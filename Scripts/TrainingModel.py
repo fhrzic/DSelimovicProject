@@ -36,6 +36,9 @@ class ship_training_app:
         self.mae_loss = torch.nn.L1Loss(reduction = 'none')
         
     def init_models(self):
+
+        assert self.model_params.name in ["CNN_REG"], f"Wrong model name, got: {self.model_params.name}"
+
         if self.model_params.name == "CNN_REG":
             _model = CNN_REG(max_pooling_ratio = self.model_params.max_pooling_rate, 
             scaler = self.model_params.scaler)
@@ -50,10 +53,14 @@ class ship_training_app:
             Init optimizer: Feel free to add other optmizers. UPGRADE: optimizer as param
             self.lr = 0.06 0.03
         """
-        #return torch.optim.Adam(self.model.parameters(), lr = self.model_params.learning_rate)
-        return torch.optim.SGD(self.model.parameters(), lr=self.model_params.learning_rate, 
-                               momentum=0.9)
-    
+        assert self.model_params.opt_name in ["SGD", "ADAM"], f"Wrong optimizer name, got: {self.model_params.opt_name}"
+
+        if self.model_params.opt_name == 'SGD':
+            return torch.optim.SGD(self.model.parameters(), lr=self.model_params.learning_rate, 
+            momentum=0.9)
+
+        if self.model_params.opt_name == 'ADAM':
+            return torch.optim.Adam(self.model.parameters(), lr = self.model_params.learning_rate)
     
     def train_model(self, data):
         """
