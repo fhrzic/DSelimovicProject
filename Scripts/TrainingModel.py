@@ -37,31 +37,6 @@ class ship_training_app:
         self.mse_loss = torch.nn.MSELoss(reduction = 'none')
         self.mae_loss = torch.nn.L1Loss(reduction = 'none')
 
-        # Results
-                # Set savers
-        self.training_results_dict = {
-            'epoch': [],
-            'mse_general': [],
-            'mae_general': [],
-            'mse_Hs': [],
-            'mse_Tz': [],
-            'mse_Dp': [],
-            'mae_Hs': [],
-            'mae_Tz': [],
-            'mae_Dp': [],
-        }
-
-        self.validation_results_dict = {
-            'epoch': [],
-            'mse_general': [],
-            'mae_general': [],
-            'mse_Hs': [],
-            'mse_Tz': [],
-            'mse_Dp': [],
-            'mae_Hs': [],
-            'mae_Tz': [],
-            'mae_Dp': [],
-        }
         
     def init_models(self):
 
@@ -254,7 +229,7 @@ class ship_training_app:
             print('Saving best model!')
             torch.save(_state, 'best_model-true.pth')
 
-    def save_metrics(self, epoch, metrics, mode):
+    def save_metrics(self, epoch, metrics, dict):
         """
         function to populate metrics dict
         """
@@ -262,29 +237,18 @@ class ship_training_app:
         _metrics = metrics.to('cpu')
         _metrics = _metrics.detach().numpy()
 
-        if mode == 'Train':
-            self.training_results_dict['epoch'].append(epoch)
-            self.training_results_dict['mse_general'].append(np.mean(_metrics[0]))
-            self.training_results_dict['mae_general'].append(np.mean(_metrics[1]))
-            self.training_results_dict['mse_Hs'].append(np.mean(_metrics[2]))
-            self.training_results_dict['mse_Tz'].append(np.mean(_metrics[3]))
-            self.training_results_dict['mse_Dp'].append(np.mean(_metrics[4]))
-            self.training_results_dict['mae_Hs'].append(np.mean(_metrics[5]))
-            self.training_results_dict['mae_Tz'].append(np.mean(_metrics[6]))
-            self.training_results_dict['mae_Dp'].append(np.mean(_metrics[7]))
-        
-        if mode == 'Valid':
-            self.validation_results_dict['epoch'].append(epoch)
-            self.validation_results_dict['mse_general'].append(np.mean(_metrics[0]))
-            self.validation_results_dict['mae_general'].append(np.mean(_metrics[1]))
-            self.validation_results_dict['mse_Hs'].append(np.mean(_metrics[2]))
-            self.validation_results_dict['mse_Tz'].append(np.mean(_metrics[3]))
-            self.validation_results_dict['mse_Dp'].append(np.mean(_metrics[4]))
-            self.validation_results_dict['mae_Hs'].append(np.mean(_metrics[5]))
-            self.validation_results_dict['mae_Tz'].append(np.mean(_metrics[6]))
-            self.validation_results_dict['mae_Dp'].append(np.mean(_metrics[7]))
+        dict['epoch'].append(epoch)
+        dict['mse_general'].append(np.mean(_metrics[0]))
+        dict['mae_general'].append(np.mean(_metrics[1]))
+        dict['mse_Hs'].append(np.mean(_metrics[2]))
+        dict['mse_Tz'].append(np.mean(_metrics[3]))
+        dict['mse_Dp'].append(np.mean(_metrics[4]))
+        dict['mae_Hs'].append(np.mean(_metrics[5]))
+        dict['mae_Tz'].append(np.mean(_metrics[6]))
+        dict['mae_Dp'].append(np.mean(_metrics[7]))
 
-    def export_metrics_to_xlsx(self, best_epoch, best_score):
+
+    def export_metrics_to_xlsx(self, best_epoch, best_score, training_dict, validation_dict):
         """
         Function that exports model's training and validation metrics to dictionary
         """
@@ -295,8 +259,8 @@ class ship_training_app:
                 f":{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine = 'xlsxwriter')
         
         # Generate dataframes
-        _df_train = pd.DataFrame.from_dict(self.training_results_dict)
-        _df_valid = pd.DataFrame.from_dict(self.validation_results_dict)
+        _df_train = pd.DataFrame.from_dict(training_dict)
+        _df_valid = pd.DataFrame.from_dict(validation_dict)
 
         _df_train.to_excel(_writer, sheet_name="Training", index = False)
         _df_valid.to_excel(_writer, sheet_name="Validation", index = False)
@@ -325,7 +289,31 @@ class ship_training_app:
             Main train function.
         """
         print(f"Starting training {self}")
-            
+          # Set savers
+        training_results_dict = {
+            'epoch': [],
+            'mse_general': [],
+            'mae_general': [],
+            'mse_Hs': [],
+            'mse_Tz': [],
+            'mse_Dp': [],
+            'mae_Hs': [],
+            'mae_Tz': [],
+            'mae_Dp': [],
+        }
+
+        validation_results_dict = {
+            'epoch': [],
+            'mse_general': [],
+            'mae_general': [],
+            'mse_Hs': [],
+            'mse_Tz': [],
+            'mse_Dp': [],
+            'mae_Hs': [],
+            'mae_Tz': [],
+            'mae_Dp': [],
+        }
+
         # Set score 
         _best_score = 1000.0
         _best_epoch = 0
@@ -336,7 +324,7 @@ class ship_training_app:
             _metrics = self.train_model(self.train_dl)
             self.eval_metrics(_epoch, _metrics, 'Train')
             self.save_model(_epoch, best = False)
-            self.save_metrics(_epoch, _metrics, 'Train')
+            self.save_metrics(_epoch, _metrics, training_results_dict)
 
             
             # Validation
@@ -345,7 +333,7 @@ class ship_training_app:
                 print("*************")
                 _mse = self.eval_metrics(_epoch, _metrics, 'Valid')
                 print("*************")
-                self.save_metrics(_epoch, _metrics, 'Valid')
+                self.save_metrics(_epoch, _metrics, validation_results_dict)
                 _mse = np.mean(_mse)
 
                 if _epoch == 1 or ( _mse < _best_score):
@@ -359,7 +347,8 @@ class ship_training_app:
                 break
         
         # Save metrics
-        self.export_metrics_to_xlsx(_best_epoch, _best_score)
+        self.export_metrics_to_xlsx(_best_epoch, _best_score, 
+                            training_results_dict, validation_results_dict)
 
         # Release memory
         torch.cuda.empty_cache()
