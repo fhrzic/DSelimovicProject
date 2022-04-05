@@ -92,7 +92,7 @@ class ship_training_app:
         for _index, _batch in _batch_iter:
             # Clear grads
             self.optimizer.zero_grad()
-            
+
             # Calc loss
             _loss = self.get_loss(_index, _batch, _metrics)
             
