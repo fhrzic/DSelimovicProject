@@ -1,10 +1,13 @@
 from collections import namedtuple
+from typing import Union
 import torch
 from Models import *
+from AugmentationModel import *
 import numpy as np
 import datetime
 import pandas as pd
 import xlsxwriter
+
 
 model_params = namedtuple(
     'model_params',
@@ -31,14 +34,15 @@ class ship_training_app:
         self.device = torch.device("cuda" if self.use_cuda and self.model_params.gpu else "cpu")
         
         
-        self.model = self.init_models()
+        self.model = self.init_model()
         self.optimizer = self.init_optimizer()
-        
+        self.aug_model = self.init_aug_model()
+
+
         self.mse_loss = torch.nn.MSELoss(reduction = 'none')
         self.mae_loss = torch.nn.L1Loss(reduction = 'none')
 
-        
-    def init_models(self):
+    def init_model(self):
 
         assert self.model_params.name in ["CNN_REG"], f"Wrong model name, got: {self.model_params.name}"
 
@@ -63,12 +67,27 @@ class ship_training_app:
         assert self.model_params.opt_name in ["SGD", "ADAM"], f"Wrong optimizer name, got: {self.model_params.opt_name}"
 
         if self.model_params.opt_name == 'SGD':
-            return torch.optim.SGD(self.model.parameters(), lr=self.model_params.learning_rate, 
+            return torch.optim.SGD(self.model.parameters(), lr = self.model_params.learning_rate, 
             momentum=0.9)
 
         if self.model_params.opt_name == 'ADAM':
             return torch.optim.Adam(self.model.parameters(), lr = self.model_params.learning_rate)
-    
+
+    def init_aug_model(self):
+        print(f"USING AUG TYPE: {self.model_params.aug_model_name}")
+        _name = self.model_params.aug_model_name
+        assert _name in ["None", "batch-wise", "row-wise"], f"Wrong aug model name, got: {_name}"
+        if _name == None:
+            return None
+        
+        if _name == "batch-wise":
+            return augmentation_model_per_batch(input_signal_length = 1501, patch_size = self.train_dl.batch_size)
+
+        if _name == "row-wise":
+            return augmentation_model_per_row(input_signal_length = 1501, patch_size = self.train_dl.batch_size)
+
+
+
     def train_model(self, data):
         """
         Training model function. 
@@ -146,8 +165,9 @@ class ship_training_app:
         _input_data, _output_data, _info_data = batch
         
         # Augmenet data
-        #if aug:
-        #    _input_data, _mask_data = self.aug_model(_input_data, _mask_data)
+
+        if self.aug_model != None:
+            _input_data = self.aug_model(_input_data)
         
         # Transfer data to GPU
         _input_data = _input_data.to(self.device, non_blocking = True)
@@ -255,8 +275,9 @@ class ship_training_app:
         
         # Generate writer for a given model
         if self.model_params.name == 'CNN_REG':
-            _writer = pd.ExcelWriter(f"{self.model_params.name}:{self.model_params.max_pooling_rate}:{self.model_params.scaler}_{self.model_params.opt_name}" +  
-                f":{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine = 'xlsxwriter')
+            _writer = pd.ExcelWriter(f"{self.model_params.name}:{self.model_params.max_pooling_rate}:{self.model_params.scaler}" + 
+                f"_{self.model_params.opt_name}:{self.model_params.aug_model_name}:" +  
+                f"{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine = 'xlsxwriter')
         
         # Generate dataframes
         _df_train = pd.DataFrame.from_dict(training_dict)
@@ -342,7 +363,8 @@ class ship_training_app:
                     _best_epoch = _epoch
             
             # Early stopping
-            if _epoch - _best_epoch  > self.model_params.valid_epochs * 7:
+            _early_stopping = max(self.model_params.valid_epochs * 7, 20)
+            if _epoch - _best_epoch  > _early_stopping:
                 print(f"Early stopping at epoch: {_epoch}")
                 break
         
