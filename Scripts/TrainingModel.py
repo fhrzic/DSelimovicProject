@@ -44,14 +44,21 @@ class ship_training_app:
 
     def init_model(self):
 
-        assert self.model_params.name in ["CNN_REG"], f"Wrong model name, got: {self.model_params.name}"
-
+        assert self.model_params.name in ["CNN_REG", "MLSTM_CNN", "SP_NN"], f"Wrong model name, got: {self.model_params.name}"
+        print("**************************************")
         print(f"USING MODEL: {self.model_params.name}")
 
         if self.model_params.name == "CNN_REG":
             _model = CNN_REG(max_pooling_ratio = self.model_params.max_pooling_rate, 
-            scaler = self.model_params.scaler)
+                scaler = self.model_params.scaler)
         
+        if self.model_params.name == "MLSTM_CNN":
+            _model = MLSTM_CNN(scaler = self.model_params.scaler)
+
+        if self.model_params.name == "SP_NN":
+            _model = SP_NN(max_pooling_ratio = self.model_params.max_pooling_rate, 
+                scaler = self.model_params.scaler)
+
         if self.model_params.gpu:
             print(f"USING GPU: {self.device}")
             _model = _model.to(self.device)
@@ -223,6 +230,9 @@ class ship_training_app:
 
                 * best, boolean, Is this the best model
         """
+        _name = f"{self.model_params.name}:{self.model_params.max_pooling_rate}:{self.model_params.scaler}" + \
+                f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  \
+                f"{self.model_params.learning_rate}"
 
         _model = self.model
         
@@ -241,13 +251,13 @@ class ship_training_app:
         }
         
         # Save last model
-        torch.save(_state, 'last_model-true.pth')
+        torch.save(_state, _name + '_last_model.pth')
         print('Saving model!')
         
         # Save best model
         if best:
             print('Saving best model!')
-            torch.save(_state, 'best_model-true.pth')
+            torch.save(_state, _name + '_best_model.pth')
 
     def save_metrics(self, epoch, metrics, dict):
         """
@@ -274,9 +284,14 @@ class ship_training_app:
         """
         
         # Generate writer for a given model
-        if self.model_params.name == 'CNN_REG':
+        if self.model_params.name == 'CNN_REG' or self.model_params.name == 'SP_NN':
             _writer = pd.ExcelWriter(f"{self.model_params.name}:{self.model_params.max_pooling_rate}:{self.model_params.scaler}" + 
-                f"_{self.model_params.opt_name}:{self.model_params.aug_model_name}:" +  
+                f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  
+                f"{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine = 'xlsxwriter')
+        
+        if self.model_params.name == 'MLSTM_CNN':
+            _writer = pd.ExcelWriter(f"{self.model_params.name}:{self.model_params.scaler}" + 
+                f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  
                 f"{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine = 'xlsxwriter')
         
         # Generate dataframes
@@ -309,7 +324,8 @@ class ship_training_app:
         """
             Main train function.
         """
-        print(f"Starting training {self}")
+        print(f"Starting training!")
+        print("**************************************")
           # Set savers
         training_results_dict = {
             'epoch': [],
