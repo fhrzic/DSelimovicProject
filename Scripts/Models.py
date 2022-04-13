@@ -1,6 +1,6 @@
 from numpy import float32
 import torch
-from torch import dropout, nn
+from torch import Tensor, dropout, nn
 import torch.nn.functional as F
 import math
 
@@ -181,14 +181,14 @@ class SP_NN(nn.Module):
         self.dense_number = math.floor((((1501-25+1) - 1 + 1) / self.pool_ratio)) * 3
 
         # Conv
-        self.first_conv = torch.nn.Conv2d(1, 64 * self.scaler, kernel_size = (1, 25))
-        self.second_conv = torch.nn.Conv2d(64 * self.scaler, 128 * self.scaler, kernel_size = (3, 1))
+        self.first_conv = torch.nn.Conv2d(1, 48 * self.scaler, kernel_size = (1, 25))
+        self.second_conv = torch.nn.Conv2d(48 * self.scaler, 48 * self.scaler, kernel_size = (3, 1))
 
         # SE Block
         self.se_block = SE_Block(64 * self.scaler, r = 16)
 
         # Dense
-        self.dense = torch.nn.Linear(self.dense_number * 128 * self.scaler, 30 * self.scaler)
+        self.dense = torch.nn.Linear(self.dense_number * 48 * self.scaler, 30 * self.scaler)
         self.dropout = nn.Dropout(p=0.25)
 
         # Output layer
@@ -217,7 +217,7 @@ class SP_NN(nn.Module):
 
         # Concat and flatten
         _out = torch.cat((_out_max, _out_min, _out_avg), dim = 3)
-        _out = _out.view(-1, self.dense_number * 128 * self.scaler)
+        _out = _out.view(-1, self.dense_number * 48 * self.scaler)
 
         # Dense and head
         _out = self.dense(_out)
@@ -226,5 +226,117 @@ class SP_NN(nn.Module):
 
         _out = self.output_layer(_out)
         _out = torch.tanh(_out)
+
+        return _out
+
+class Positional_Encoding(nn.Module):
+    """
+    https://pytorch.org/tutorials/beginner/transformer_tutorial.html#define-the-model
+    """
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        pe = torch.zeros(max_len, 1, d_model)
+        pe[:, 0, 0::2] = torch.sin(position * div_term)
+        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x: Tensor, shape [seq_len, batch_size, embedding_dim]
+        """
+        x = x + self.pe[:x.size(0)]
+        return self.dropout(x)
+
+class Normalization_block(nn.Module):
+    """
+    https://towardsdatascience.com/how-to-code-the-transformer-in-pytorch-24db27c8f9ec#d554
+    """
+    def __init__(self, d_model, eps = 1e-6):
+        super().__init__()
+    
+        self.size = d_model
+        # create two learnable parameters to calibrate normalisation
+        self.alpha = nn.Parameter(torch.ones(self.size))
+        self.bias = nn.Parameter(torch.zeros(self.size))
+        self.eps = eps
+    def forward(self, x):
+        norm = self.alpha * (x - x.mean(dim=-1, keepdim=True)) \
+        / (x.std(dim=-1, keepdim=True) + self.eps) + self.bias
+        return norm
+
+class Attention_block(nn.Module):
+    def __init__(self, number_of_heads=4, number_of_embedings = 128):
+        super(Attention_block, self).__init__()
+        
+        # First mha
+        self.first_mha = torch.nn.MultiheadAttention(embed_dim = number_of_embedings, 
+                                                    num_heads = number_of_heads)
+        self.first_normalize = Normalization_block(d_model = number_of_embedings)
+
+        # Second mha
+        self.second_mha = torch.nn.MultiheadAttention(embed_dim = number_of_embedings, 
+                                                    num_heads = number_of_heads)
+        self.second_normalize = Normalization_block(d_model = number_of_embedings)
+
+    def forward(self, input_1):
+        _out_1, _ = self.first_mha(input_1, input_1, input_1)
+        
+        _input_2 = input_1 + _out_1
+        _input_2 = self.first_normalize(_input_2)
+
+        _out_2, _ = self.second_mha(_input_2, _input_2, _input_2)
+        
+        _input_3 = _input_2 + _out_2
+        _input_3 = self.second_normalize(_input_3)
+
+        return _input_3
+
+class head_block(nn.Module):
+    def __init__(self):
+        pass
+
+    def forward(self):
+        pass
+
+class ATT_NN(nn.Module):
+    def __init__(self, number_of_blocks = 1, number_of_heads=4, embeding_scale = 30, number_of_embedings = 128):
+        # Init
+        super(ATT_NN, self).__init__()
+
+        # Embedding
+        self.create_embeding = torch.nn.Conv2d(1, number_of_embedings , kernel_size = (3, embeding_scale))
+        _seq_length = 1501-embeding_scale + 1 
+        self.positional_encoding = Positional_Encoding(d_model = number_of_embedings, 
+                                                        max_len = _seq_length)
+        
+       
+        # Multiheads attentins
+        self.block_list = nn.ModuleList()
+        for i in range(number_of_blocks):
+            self.block_list.append(Attention_block(number_of_heads, number_of_embedings))                            
+
+        # Decision heads
+
+
+    def forward(self, x):
+        # Fix input and create embeding
+        _out = self.create_embeding(x)
+        print(_out.shape)        
+        _out = torch.squeeze(_out, dim = 2)
+        _out = _out.permute(2,0,1)
+        _out = self.positional_encoding(_out)
+        
+        # Go trough attentions
+        for _i, _att_block in enumerate(self.block_list):
+            _out = _att_block(_out)
+
+        # Rearange output
+        _out = _out.permute(1,2,0)
+        _out = torch.unsqueeze(_out, dim = 2)
 
         return _out
