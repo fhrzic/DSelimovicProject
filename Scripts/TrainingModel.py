@@ -44,7 +44,7 @@ class ship_training_app:
 
     def init_model(self):
 
-        assert self.model_params.name in ["CNN_REG", "MLSTM_CNN", "SP_NN"], f"Wrong model name, got: {self.model_params.name}"
+        assert self.model_params.name in ["CNN_REG", "MLSTM_CNN", "SP_NN", "ATT_NN"], f"Wrong model name, got: {self.model_params.name}"
         print("**************************************")
         print(f"USING MODEL: {self.model_params.name}")
 
@@ -58,6 +58,10 @@ class ship_training_app:
         if self.model_params.name == "SP_NN":
             _model = SP_NN(max_pooling_ratio = self.model_params.max_pooling_rate, 
                 scaler = self.model_params.scaler)
+
+        if self.model_params.name == "ATT_NN":
+            _model = ATT_NN(self.model_params.blocks, self.model_params.heads, self.model_params.emb_scale,
+                            self.model_params.num_emb, self.model_params.heads_shape)
 
         if self.model_params.gpu:
             print(f"USING GPU: {self.device}")
@@ -230,9 +234,24 @@ class ship_training_app:
 
                 * best, boolean, Is this the best model
         """
-        _name = f"{self.model_params.name}:{self.model_params.max_pooling_rate}:{self.model_params.scaler}" + \
-                f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  \
-                f"{self.model_params.learning_rate}"
+
+        if self.model_params.name in ["CNN_REG", "SP_NN"]:
+            _name = f"{self.model_params.name}:{self.model_params.max_pooling_rate}:{self.model_params.scaler}" + \
+                    f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  \
+                    f"{self.model_params.learning_rate}"
+
+
+        if self.model_params.name == "MLSTM_CNN":
+            _name = f"{self.model_params.name}:{self.model_params.scaler}" + \
+                    f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  \
+                    f"{self.model_params.learning_rate}"
+
+        if self.model_params.name == "ATT_NN":
+            _name = f"{self.model_params.name}:{self.model_params.blocks}:{self.model_params.heads}:" + \
+                    f"{self.model_params.emb_scale}:{self.model_params.heads_shape}" + \
+                    f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  \
+                    f"{self.model_params.learning_rate}"
+
 
         _model = self.model
         
@@ -251,13 +270,13 @@ class ship_training_app:
         }
         
         # Save last model
-        torch.save(_state, _name + '_last_model.pth')
+        torch.save(_state, "Results/"+_name + '_last_model.pth')
         print('Saving model!')
         
         # Save best model
         if best:
             print('Saving best model!')
-            torch.save(_state, _name + '_best_model.pth')
+            torch.save(_state, "Results/"+ _name + '_best_model.pth')
 
     def save_metrics(self, epoch, metrics, dict):
         """
@@ -285,15 +304,21 @@ class ship_training_app:
         
         # Generate writer for a given model
         if self.model_params.name == 'CNN_REG' or self.model_params.name == 'SP_NN':
-            _writer = pd.ExcelWriter(f"{self.model_params.name}:{self.model_params.max_pooling_rate}:{self.model_params.scaler}" + 
+            _writer = pd.ExcelWriter("Results/"+f"{self.model_params.name}:{self.model_params.max_pooling_rate}:{self.model_params.scaler}" + 
                 f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  
                 f"{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine = 'xlsxwriter')
         
         if self.model_params.name == 'MLSTM_CNN':
-            _writer = pd.ExcelWriter(f"{self.model_params.name}:{self.model_params.scaler}" + 
+            _writer = pd.ExcelWriter("Results/"+f"{self.model_params.name}:{self.model_params.scaler}" + 
                 f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  
                 f"{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine = 'xlsxwriter')
         
+        if self.model_params.name == 'ATT_NN':
+            _writer = pd.ExcelWriter("Results/"+  f"{self.model_params.name}:{self.model_params.blocks}:{self.model_params.heads}:" + 
+                    f"{self.model_params.emb_scale}:{self.model_params.heads_shape}" + 
+                    f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  
+                    f"{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine= 'xlsxwriter')
+
         # Generate dataframes
         _df_train = pd.DataFrame.from_dict(training_dict)
         _df_valid = pd.DataFrame.from_dict(validation_dict)

@@ -297,22 +297,77 @@ class Attention_block(nn.Module):
         return _input_3
 
 class head_block(nn.Module):
-    def __init__(self):
-        pass
+    def __init__(self, number_of_neurons: list):
+        super(head_block, self).__init__()
+        # Dense layers
+        
+        self.dense_1 = torch.nn.Linear(number_of_neurons[0], number_of_neurons[1])
+        self.dense_2 = torch.nn.Linear(number_of_neurons[1], number_of_neurons[2])
+        self.dense_3 = torch.nn.Linear(number_of_neurons[2], number_of_neurons[3])
+        self.dense_4 = torch.nn.Linear(number_of_neurons[3], number_of_neurons[4])
+        self.output = torch.nn.Linear(number_of_neurons[4], 1)
+        
+        self.a_1 = torch.nn.ReLU()
+        self.a_2 = torch.nn.ReLU()
+        self.a_3 = torch.nn.ReLU()
+        self.a_4 = torch.nn.ReLU()
+        self.a_o = torch.nn.Sigmoid()
 
-    def forward(self):
-        pass
+        self.drop_1 = torch.nn.Dropout(p = 0.1)
+        self.drop_2 = torch.nn.Dropout(p = 0.1)
+        self.drop_3 = torch.nn.Dropout(p = 0.1)
+        self.drop_4 = torch.nn.Dropout(p = 0.1)
+
+        self.bn_1 = torch.nn.BatchNorm1d(number_of_neurons[1])
+        self.bn_2 = torch.nn.BatchNorm1d(number_of_neurons[2])
+        self.bn_3 = torch.nn.BatchNorm1d(number_of_neurons[3])
+        self.bn_4 = torch.nn.BatchNorm1d(number_of_neurons[4])
+
+    def forward(self, x):
+        # First block
+        _out = self.dense_1(x)
+        _out = self.a_1(_out)
+        _out = self.bn_1(_out)
+        _out = self.drop_1(_out)
+
+        # Second block
+        _out = self.dense_2(_out)
+        _out = self.a_2(_out)
+        _out = self.bn_2(_out)
+        _out = self.drop_2(_out)
+        
+        # Third block
+        _out = self.dense_3(_out)
+        _out = self.a_3(_out)
+        _out = self.bn_3(_out)
+        _out = self.drop_3(_out)
+
+        # Four block
+        _out = self.dense_4(_out)
+        _out = self.a_4(_out)
+        _out = self.bn_4(_out)
+        _out = self.drop_4(_out)
+
+        # Output block
+        _out = self.output(_out)
+        _out = self.a_o(_out)
+
+        return _out
+
+
 
 class ATT_NN(nn.Module):
-    def __init__(self, number_of_blocks = 1, number_of_heads=4, embeding_scale = 30, number_of_embedings = 128):
+    def __init__(self, number_of_blocks = 1, number_of_heads=4, embeding_scale = 30, 
+                number_of_embedings = 128, batch_size = 32, head_neurons = [4096, 4096, 2048, 512, 1]):
         # Init
         super(ATT_NN, self).__init__()
 
         # Embedding
         self.create_embeding = torch.nn.Conv2d(1, number_of_embedings , kernel_size = (3, embeding_scale))
-        _seq_length = 1501-embeding_scale + 1 
+        self.seq_length = 1501-embeding_scale + 1 
+        self.number_of_embedings = number_of_embedings
         self.positional_encoding = Positional_Encoding(d_model = number_of_embedings, 
-                                                        max_len = _seq_length)
+                                                        max_len = self.seq_length)
         
        
         # Multiheads attentins
@@ -321,7 +376,9 @@ class ATT_NN(nn.Module):
             self.block_list.append(Attention_block(number_of_heads, number_of_embedings))                            
 
         # Decision heads
-
+        self.head_Hs = head_block([self.seq_length * self.number_of_embedings, 4096, 4096, 2048, 512])
+        self.head_Ts = head_block([self.seq_length * self.number_of_embedings, 4096, 4096, 2048, 512])
+        self.head_Dp = head_block([self.seq_length * self.number_of_embedings, 4096, 4096, 2048, 512])
 
     def forward(self, x):
         # Fix input and create embeding
@@ -338,5 +395,15 @@ class ATT_NN(nn.Module):
         # Rearange output
         _out = _out.permute(1,2,0)
         _out = torch.unsqueeze(_out, dim = 2)
+        
+        # Flatten
+        _out = _out.reshape(-1, self.seq_length * self.number_of_embedings)
 
+        
+        # Heads parts
+        _head_Hs = self.head_Hs(_out)
+        _head_Ts = self.head_Ts(_out)
+        _head_Dp = self.head_Dp(_out)
+
+        _out = torch.cat((_head_Hs, _head_Ts, _head_Dp), dim = 1)
         return _out
