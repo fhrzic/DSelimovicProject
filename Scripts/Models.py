@@ -305,13 +305,13 @@ class head_block(nn.Module):
         self.dense_2 = torch.nn.Linear(number_of_neurons[1], number_of_neurons[2])
         self.dense_3 = torch.nn.Linear(number_of_neurons[2], number_of_neurons[3])
         self.dense_4 = torch.nn.Linear(number_of_neurons[3], number_of_neurons[4])
-        self.output = torch.nn.Linear(number_of_neurons[4], 1)
+        self.output = torch.nn.Linear(number_of_neurons[4], number_of_neurons[5])
         
         self.a_1 = torch.nn.ReLU()
         self.a_2 = torch.nn.ReLU()
         self.a_3 = torch.nn.ReLU()
         self.a_4 = torch.nn.ReLU()
-        self.a_o = torch.nn.Sigmoid()
+        self.a_o = torch.nn.ReLU()
 
         self.drop_1 = torch.nn.Dropout(p = 0.1)
         self.drop_2 = torch.nn.Dropout(p = 0.1)
@@ -358,7 +358,7 @@ class head_block(nn.Module):
 
 class ATT_NN(nn.Module):
     def __init__(self, number_of_blocks = 1, number_of_heads=4, embeding_scale = 30, 
-                number_of_embedings = 128, batch_size = 32, head_neurons = [4096, 4096, 2048, 512, 1]):
+                number_of_embedings = 128, head_neurons = [4096, 4096, 2048, 512, 1]):
         # Init
         super(ATT_NN, self).__init__()
 
@@ -368,7 +368,6 @@ class ATT_NN(nn.Module):
         self.number_of_embedings = number_of_embedings
         self.positional_encoding = Positional_Encoding(d_model = number_of_embedings, 
                                                         max_len = self.seq_length)
-        
        
         # Multiheads attentins
         self.block_list = nn.ModuleList()
@@ -376,14 +375,13 @@ class ATT_NN(nn.Module):
             self.block_list.append(Attention_block(number_of_heads, number_of_embedings))                            
 
         # Decision heads
-        self.head_Hs = head_block([self.seq_length * self.number_of_embedings, 4096, 4096, 2048, 512])
-        self.head_Ts = head_block([self.seq_length * self.number_of_embedings, 4096, 4096, 2048, 512])
-        self.head_Dp = head_block([self.seq_length * self.number_of_embedings, 4096, 4096, 2048, 512])
+        self.head_Hs = head_block([self.seq_length * self.number_of_embedings] + head_neurons)
+        self.head_Ts = head_block([self.seq_length * self.number_of_embedings] + head_neurons)
+        self.head_Dp = head_block([self.seq_length * self.number_of_embedings] + head_neurons)
 
     def forward(self, x):
         # Fix input and create embeding
         _out = self.create_embeding(x)
-        print(_out.shape)        
         _out = torch.squeeze(_out, dim = 2)
         _out = _out.permute(2,0,1)
         _out = self.positional_encoding(_out)
@@ -402,6 +400,8 @@ class ATT_NN(nn.Module):
         
         # Heads parts
         _head_Hs = self.head_Hs(_out)
+        return _head_Hs
+        #return torch.cat((_head_Hs, _head_Hs, _head_Hs), dim = 1)
         _head_Ts = self.head_Ts(_out)
         _head_Dp = self.head_Dp(_out)
 
