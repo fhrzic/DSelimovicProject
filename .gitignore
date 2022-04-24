@@ -132,3 +132,4 @@ dmypy.json
 Dataset/
 data-cache/
 __pycache__
+ATT_NN_RESULTS/
