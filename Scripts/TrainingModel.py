@@ -417,3 +417,32 @@ class ship_training_app:
         torch.cuda.empty_cache()
 
         
+def return_top_k(path: str, k: int)-> dict:
+    """
+    Standalone method that grabs k-best results from the folder that contains formate ".xlsx" 
+    resutls of model training. Returns dictionary
+
+    Args:
+        * path, str --> path to the dir contatining results.
+        * k, int --> how many results to return.
+    """
+    # Grab xlsx
+    xlsx_list = os.listdir(path)
+    
+    # Set save dict
+    unsorted_dict = {}
+    for xlsx in xlsx_list:
+        mse = float(xlsx.split(":")[-1].split(".xlsx")[0]) 
+        unsorted_dict[mse] = xlsx
+
+    # Sort dict
+    sort_dict = dict(sorted(unsorted_dict.items()))
+    
+    # Top k keys
+    return_dict = {}
+    for i, key in enumerate(sort_dict):
+        if i == k:
+            break
+        return_dict[sort_dict[key]] = key
+    
+    return (return_dict)

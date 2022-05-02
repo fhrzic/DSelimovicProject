@@ -162,7 +162,6 @@ class MLSTM_CNN(nn.Module):
     
         return _out
 
-    
 class SP_NN(nn.Module):
     """
     Implementation of the third model proposed in paper 
@@ -181,14 +180,14 @@ class SP_NN(nn.Module):
         self.dense_number = math.floor((((1501-25+1) - 1 + 1) / self.pool_ratio)) * 3
 
         # Conv
-        self.first_conv = torch.nn.Conv2d(1, 48 * self.scaler, kernel_size = (1, 25))
-        self.second_conv = torch.nn.Conv2d(48 * self.scaler, 48 * self.scaler, kernel_size = (3, 1))
+        self.first_conv = torch.nn.Conv2d(1, 64 * self.scaler, kernel_size = (1, 25))
+        self.second_conv = torch.nn.Conv2d(64 * self.scaler, 128 * self.scaler, kernel_size = (3, 1))
 
         # SE Block
         self.se_block = SE_Block(64 * self.scaler, r = 16)
 
         # Dense
-        self.dense = torch.nn.Linear(self.dense_number * 48 * self.scaler, 30 * self.scaler)
+        self.dense = torch.nn.Linear(self.dense_number * 128 * self.scaler, 30 * self.scaler)
         self.dropout = nn.Dropout(p=0.25)
 
         # Output layer
@@ -217,7 +216,7 @@ class SP_NN(nn.Module):
 
         # Concat and flatten
         _out = torch.cat((_out_max, _out_min, _out_avg), dim = 3)
-        _out = _out.view(-1, self.dense_number * 48 * self.scaler)
+        _out = _out.view(-1, self.dense_number * 128 * self.scaler)
 
         # Dense and head
         _out = self.dense(_out)
@@ -227,7 +226,8 @@ class SP_NN(nn.Module):
         _out = self.output_layer(_out)
         _out = torch.tanh(_out)
 
-        return _out
+        return _out    
+
 
 class Positional_Encoding(nn.Module):
     """
@@ -300,12 +300,11 @@ class head_block(nn.Module):
     def __init__(self, number_of_neurons: list):
         super(head_block, self).__init__()
         # Dense layers
-        
         self.dense_1 = torch.nn.Linear(number_of_neurons[0], number_of_neurons[1])
         self.dense_2 = torch.nn.Linear(number_of_neurons[1], number_of_neurons[2])
-        self.dense_3 = torch.nn.Linear(number_of_neurons[2], number_of_neurons[3])
-        self.dense_4 = torch.nn.Linear(number_of_neurons[3], number_of_neurons[4])
-        self.output = torch.nn.Linear(number_of_neurons[4], number_of_neurons[5])
+        #self.dense_3 = torch.nn.Linear(number_of_neurons[2], number_of_neurons[3])
+        #self.dense_4 = torch.nn.Linear(number_of_neurons[3], number_of_neurons[4])
+        self.output = torch.nn.Linear(number_of_neurons[2], number_of_neurons[3])
         
         self.a_1 = torch.nn.ReLU()
         self.a_2 = torch.nn.ReLU()
@@ -337,16 +336,16 @@ class head_block(nn.Module):
         _out = self.drop_2(_out)
         
         # Third block
-        _out = self.dense_3(_out)
-        _out = self.a_3(_out)
-        _out = self.bn_3(_out)
-        _out = self.drop_3(_out)
+        #_out = self.dense_3(_out)
+        #_out = self.a_3(_out)
+        #_out = self.bn_3(_out)
+        #_out = self.drop_3(_out)
 
         # Four block
-        _out = self.dense_4(_out)
-        _out = self.a_4(_out)
-        _out = self.bn_4(_out)
-        _out = self.drop_4(_out)
+        #_out = self.dense_4(_out)
+        #_out = self.a_4(_out)
+        #_out = self.bn_4(_out)
+        #_out = self.drop_4(_out)
 
         # Output block
         _out = self.output(_out)
@@ -376,8 +375,8 @@ class ATT_NN(nn.Module):
 
         # Decision heads
         self.head_Hs = head_block([self.seq_length * self.number_of_embedings] + head_neurons)
-        self.head_Ts = head_block([self.seq_length * self.number_of_embedings] + head_neurons)
-        self.head_Dp = head_block([self.seq_length * self.number_of_embedings] + head_neurons)
+        #self.head_Ts = head_block([self.seq_length * self.number_of_embedings] + head_neurons)
+        #self.head_Dp = head_block([self.seq_length * self.number_of_embedings] + head_neurons)
 
     def forward(self, x):
         # Fix input and create embeding
@@ -391,6 +390,7 @@ class ATT_NN(nn.Module):
             _out = _att_block(_out)
 
         # Rearange output
+        _att = torch.clone(_out)
         _out = _out.permute(1,2,0)
         _out = torch.unsqueeze(_out, dim = 2)
         
@@ -400,7 +400,7 @@ class ATT_NN(nn.Module):
         
         # Heads parts
         _head_Hs = self.head_Hs(_out)
-        return _head_Hs
+        return (_head_Hs, _att)
         #return torch.cat((_head_Hs, _head_Hs, _head_Hs), dim = 1)
         _head_Ts = self.head_Ts(_out)
         _head_Dp = self.head_Dp(_out)
