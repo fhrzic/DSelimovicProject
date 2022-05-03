@@ -35,32 +35,17 @@ class ship_training_app:
         
         self.model = self.init_model()
         self.optimizer = self.init_optimizer()
-        self.aug_model = self.init_aug_model()
-
 
         self.mse_loss = torch.nn.MSELoss(reduction = 'none')
         self.mae_loss = torch.nn.L1Loss(reduction = 'none')
 
     def init_model(self):
 
-        assert self.model_params.name in ["CNN_REG", "MLSTM_CNN", "SP_NN", "ATT_NN"], f"Wrong model name, got: {self.model_params.name}"
+        assert self.model_params.name in ["HEAD_NN"], f"Wrong model name, got: {self.model_params.name}"
         print("**************************************")
         print(f"USING MODEL: {self.model_params.name}")
 
-        if self.model_params.name == "CNN_REG":
-            _model = CNN_REG(max_pooling_ratio = self.model_params.max_pooling_rate, 
-                scaler = self.model_params.scaler)
-        
-        if self.model_params.name == "MLSTM_CNN":
-            _model = MLSTM_CNN(scaler = self.model_params.scaler)
-
-        if self.model_params.name == "SP_NN":
-            _model = SP_NN(max_pooling_ratio = self.model_params.max_pooling_rate, 
-                scaler = self.model_params.scaler)
-
-        if self.model_params.name == "ATT_NN":
-            _model = ATT_NN(self.model_params.blocks, self.model_params.heads, self.model_params.emb_scale,
-                            self.model_params.num_emb, self.model_params.heads_shape)
+        _model = HEAD_NN(self.model_params.neurons)
 
         if self.model_params.gpu:
             print(f"USING GPU: {self.device}")
@@ -82,21 +67,6 @@ class ship_training_app:
 
         if self.model_params.opt_name == 'ADAM':
             return torch.optim.Adam(self.model.parameters(), lr = self.model_params.learning_rate)
-
-    def init_aug_model(self):
-        print(f"USING AUG TYPE: {self.model_params.aug_model_name}")
-        _name = self.model_params.aug_model_name
-        assert _name in ["None", "batch-wise", "row-wise"], f"Wrong aug model name, got: {_name}"
-        if _name == None:
-            return None
-        
-        if _name == "batch-wise":
-            return augmentation_model_per_batch(input_signal_length = 1501, patch_size = self.train_dl.batch_size)
-
-        if _name == "row-wise":
-            return augmentation_model_per_row(input_signal_length = 1501, patch_size = self.train_dl.batch_size)
-
-
 
     def train_model(self, data):
         """
@@ -144,7 +114,7 @@ class ship_training_app:
 
         # Metrics
         # Loss MSE MAE _metrics[0] = MSE _metric[1] = MAE
-        _metrics = torch.zeros(8, len(data.dataset), device = self.device)
+        _metrics = torch.zeros(2, len(data.dataset), device = self.device)
 
         # We don't need calculate gradients 
         with torch.no_grad():
@@ -173,17 +143,21 @@ class ship_training_app:
 
         # Parse _batch
         _input_data, _output_data, _info_data = batch
-        
-        # Augmenet data
-
-        if self.aug_model != None:
-            _input_data = self.aug_model(_input_data)
-        
+                
         # Transfer data to GPU
         _input_data = _input_data.to(self.device, non_blocking = True)
         _output_data = _output_data.to(self.device, non_blocking = True)
         
-        
+        # Choose output
+        if self.model_params.module == 'Hs':
+            _output_data = _output_data[:, 0]
+
+        if self.model_params.module == 'Tz':
+            _output_data = _output_data[:, 1]
+
+        if self.model_params.module == 'Dp':
+            _output_data = _output_data[:, 2]
+
         # Loss
         # Caluclate loss
 
@@ -199,12 +173,7 @@ class ship_training_app:
         with torch.no_grad():
             metrics[0, _begin_index:_end_index] = _mse_loss.mean()
             metrics[1, _begin_index:_end_index] = _mae_loss.mean()
-            metrics[2, _begin_index:_end_index] = _mse_loss[:,0]
-            metrics[3, _begin_index:_end_index] = _mse_loss[:,1]
-            metrics[4, _begin_index:_end_index] = _mse_loss[:,2]
-            metrics[5, _begin_index:_end_index] = _mae_loss[:,0]
-            metrics[6, _begin_index:_end_index] = _mae_loss[:,1]
-            metrics[7, _begin_index:_end_index] = _mae_loss[:,2]
+            
         # Return mean of all loss          
         return _mse_loss.mean()
     
@@ -234,22 +203,8 @@ class ship_training_app:
                 * best, boolean, Is this the best model
         """
 
-        if self.model_params.name in ["CNN_REG", "SP_NN"]:
-            _name = f"{self.model_params.name}:{self.model_params.max_pooling_rate}:{self.model_params.scaler}" + \
-                    f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  \
-                    f"{self.model_params.learning_rate}"
-
-
-        if self.model_params.name == "MLSTM_CNN":
-            _name = f"{self.model_params.name}:{self.model_params.scaler}" + \
-                    f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  \
-                    f"{self.model_params.learning_rate}"
-
-        if self.model_params.name == "ATT_NN":
-            _name = f"{self.model_params.name}:{self.model_params.blocks}:{self.model_params.heads}:" + \
-                    f"{self.model_params.emb_scale}:{self.model_params.heads_shape}" + \
-                    f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  \
-                    f"{self.model_params.learning_rate}"
+        _name = f"{self.model_params.name}:{self.model_params.neurons}:" + \
+                f"{self.model_params.opt_name}:" + f"{self.model_params.learning_rate}"
 
 
         _model = self.model
@@ -288,35 +243,16 @@ class ship_training_app:
         dict['epoch'].append(epoch)
         dict['mse_general'].append(np.mean(_metrics[0]))
         dict['mae_general'].append(np.mean(_metrics[1]))
-        dict['mse_Hs'].append(np.mean(_metrics[2]))
-        dict['mse_Tz'].append(np.mean(_metrics[3]))
-        dict['mse_Dp'].append(np.mean(_metrics[4]))
-        dict['mae_Hs'].append(np.mean(_metrics[5]))
-        dict['mae_Tz'].append(np.mean(_metrics[6]))
-        dict['mae_Dp'].append(np.mean(_metrics[7]))
-
+        
 
     def export_metrics_to_xlsx(self, best_epoch, best_score, training_dict, validation_dict):
         """
         Function that exports model's training and validation metrics to dictionary
         """
-        
-        # Generate writer for a given model
-        if self.model_params.name == 'CNN_REG' or self.model_params.name == 'SP_NN':
-            _writer = pd.ExcelWriter("Results/"+f"{self.model_params.name}:{self.model_params.max_pooling_rate}:{self.model_params.scaler}" + 
+        _writer = pd.ExcelWriter("Results/"+  f"{self.model_params.name}:{self.model_params.blocks}:{self.model_params.heads}:" + 
+                f"{self.model_params.emb_scale}:{self.model_params.heads_shape}" + 
                 f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  
-                f"{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine = 'xlsxwriter')
-        
-        if self.model_params.name == 'MLSTM_CNN':
-            _writer = pd.ExcelWriter("Results/"+f"{self.model_params.name}:{self.model_params.scaler}" + 
-                f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  
-                f"{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine = 'xlsxwriter')
-        
-        if self.model_params.name == 'ATT_NN':
-            _writer = pd.ExcelWriter("Results/"+  f"{self.model_params.name}:{self.model_params.blocks}:{self.model_params.heads}:" + 
-                    f"{self.model_params.emb_scale}:{self.model_params.heads_shape}" + 
-                    f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  
-                    f"{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine= 'xlsxwriter')
+                f"{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine= 'xlsxwriter')
 
         # Generate dataframes
         _df_train = pd.DataFrame.from_dict(training_dict)
@@ -326,24 +262,7 @@ class ship_training_app:
         _df_valid.to_excel(_writer, sheet_name="Validation", index = False)
         _writer.save() 
 
-    def load_model(self, path):
-        """
-            Function that loads model.
-
-            Args:
-                * path, string, path to the model checkpoint
-        """
-        print("LOADING MODEL")
         
-        _state_dict = torch.load(path)
-        self.model.load_state_dict(_state_dict['model_state'])
-        self.optimizer.load_state_dict(_state_dict['optimizer_state'])
-        self.optimizer.name = _state_dict['optimizer_name']
-        self.model.name = _state_dict['optimizer_name']
-        
-        print(f"LOADING MODEL, epoch {_state_dict['epoch']}"
-                 + f", time {_state_dict['time']}")
-    
     def main(self):
         """
             Main train function.
@@ -354,25 +273,13 @@ class ship_training_app:
         training_results_dict = {
             'epoch': [],
             'mse_general': [],
-            'mae_general': [],
-            'mse_Hs': [],
-            'mse_Tz': [],
-            'mse_Dp': [],
-            'mae_Hs': [],
-            'mae_Tz': [],
-            'mae_Dp': [],
+            'mae_general': []
         }
 
         validation_results_dict = {
             'epoch': [],
             'mse_general': [],
-            'mae_general': [],
-            'mse_Hs': [],
-            'mse_Tz': [],
-            'mse_Dp': [],
-            'mae_Hs': [],
-            'mae_Tz': [],
-            'mae_Dp': [],
+            'mae_general': []
         }
 
         # Set score 

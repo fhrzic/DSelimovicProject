@@ -407,3 +407,51 @@ class ATT_NN(nn.Module):
 
         _out = torch.cat((_head_Hs, _head_Ts, _head_Dp), dim = 1)
         return _out
+
+
+class HEAD_NN(nn.Module):
+    def __init__(self, number_of_neurons = []):
+        # Init
+        super(HEAD_NN, self).__init__()
+
+        # Input sequence length
+
+        self.input_neurons = 1377*128
+
+        # Conv layer to flatten
+        self.dense_1 = torch.nn.Linear(self.input_neurons, number_of_neurons[0])
+        self.dense_2 = torch.nn.Linear(number_of_neurons[0], number_of_neurons[1])
+        self.dense_3 = torch.nn.Linear(number_of_neurons[1], 1)
+
+        self.a_1 = torch.nn.Tanh()
+        self.a_2 = torch.nn.Tanh()
+        self.a_3 = torch.nn.Sigmoid()
+
+        self.drop_1 = torch.nn.Dropout(p = 0.1)
+        self.drop_2 = torch.nn.Dropout(p = 0.1)
+
+        self.bn_1 = torch.nn.BatchNorm1d(number_of_neurons[0])
+        self.bn_2 = torch.nn.BatchNorm1d(number_of_neurons[1])
+
+    def forward(self, x):
+        _out = torch.squeeze(x, dim = 2)
+        
+        _out = _out.reshape(-1, self.input_neurons)
+        
+        # First block
+        _out = self.dense_1(_out)
+        _out = self.a_1(_out)
+        _out = self.bn_1(_out)
+        _out = self.drop_1(_out)
+
+        # Second block
+        _out = self.dense_2(_out)
+        _out = self.a_2(_out)
+        _out = self.bn_2(_out)
+        _out = self.drop_2(_out)
+        
+        _out = self.dense_3(_out)
+        _out = self.a_3(_out)
+
+        _out = torch.squeeze(_out, dim = 1)
+        return _out

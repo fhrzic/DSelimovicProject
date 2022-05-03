@@ -34,7 +34,6 @@ class evaluate_model():
         self.use_cuda = torch.cuda.is_available()        
         
         self.device = torch.device("cuda" if self.use_cuda and self.model_params.gpu else "cpu")
-        print(self.device)
 
         self.model = self.init_model()
         
@@ -74,7 +73,7 @@ class evaluate_model():
         _ , file = os.path.split(path)
         _splitted = file.split(':')
         _name = _splitted[0]
-        _cuda = True
+        _cuda = False
         if _name == 'ATT_NN':
             _params = model_params_att(_name, _cuda, int(_splitted[1]), 
                                     int(_splitted[2]), int(_splitted[3]), 
@@ -100,7 +99,7 @@ class evaluate_model():
         self.model.name = _state_dict['model_name']
 
     
-    def __evaluate(self, sample):
+    def evaluate(self, sample):
         with torch.no_grad():
             self.model.eval()
             _sample = sample.to(self.device)
@@ -125,9 +124,9 @@ class evaluate_model():
             print(f"Validation: {_i}", end = '\r')
             _input, _output, _info = _batch
             if self.model_params.name == 'ATT_NN':
-                _predictions, _ = self.__evaluate(_input)
+                _predictions, _ = self.evaluate(_input)
             else:
-                _predictions = self.__evaluate(_input)
+                _predictions = self.evaluate(_input)
             
             if self.model_params.gpu:
                 _output = _output.to('cpu')
@@ -157,9 +156,9 @@ class evaluate_model():
             _input, _output, _info = _batch
             _predictions = self.__evaluate(_input)
             if self.model_params.name == 'ATT_NN':
-                _predictions, _ = self.__evaluate(_input)
+                _predictions, _ = self.evaluate(_input)
             else:
-                _predictions = self.__evaluate(_input)
+                _predictions = self.evaluate(_input)
             
             if self.model_params.gpu:
                 _output = _output.to('cpu')

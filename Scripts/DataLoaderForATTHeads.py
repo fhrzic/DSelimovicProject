@@ -13,6 +13,8 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from collections import namedtuple
+from Models import ATT_NN
+from EvaluateModel import *
 
 # Named tupple class
 data_params = namedtuple(
@@ -149,7 +151,7 @@ class Data:
 
 class ship_dataset:
     
-    def __init__(self, data_root_dir = None, dataset_return = 'train'):
+    def __init__(self, data_root_dir = None, dataset_return = 'train', model_weights_path = 'None'):
         """
         Init: Creates data loader.
         
@@ -158,8 +160,15 @@ class ship_dataset:
             * data_root_dir, str, path to data root
             
             * dataset_return, number or enum [0,1,2]: 0 - train, 1 - valid, 2 - test, default: train
+
+            * mode_weights_path, path to saved model that calculates embedding, default: None
+
         """
-        
+        # Load model
+        assert model_weights_path != None, f"Wrong file path to models weights, got: {model_weights_path}"
+
+        self.get_embedding = evaluate_model(model_weights_path)
+
         # Transform names data
         assert dataset_return in [0, 1, 2, 'train', 'valid', 'test'], f"Wrong dataset descriptor, got: {dataset_return}"
         _name_transform_dict = {'train': 0, 'valid': 1, 'test': 2}
@@ -207,10 +216,14 @@ class ship_dataset:
         _input = _input.to(torch.float32)
         _output = _output.to(torch.float32)
         _input = _input.unsqueeze(0)
+        _input = _input.unsqueeze(0)
+
+        _, _input = self.get_embedding.evaluate(_input)
+
         return (_input, _output, _sample_path)               
 
 # Generate dataloader
-def init_dataloader(dataset_params):
+def init_dataloader(dataset_params, model_weights_path):
     """
         Init of the  data loader. NOT TESTED FOR MULTIPLE GPU
         Creating wrapper arround data class. 
@@ -221,8 +234,9 @@ def init_dataloader(dataset_params):
             * batch_size, int, size of the batch
             * use_gpu, boolean, if gpu used
             * num_wokers, int, number of workers for data loading
+            * model_weights_path, path do model weights that calculates embedding
     """
-    _ds = ship_dataset(dataset_params.root_dir, dataset_params.dataset)
+    _ds = ship_dataset(dataset_params.root_dir, dataset_params.dataset, model_weights_path)
 
     _dl = DataLoader(
         _ds,
