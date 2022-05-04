@@ -73,7 +73,7 @@ class evaluate_model():
         _ , file = os.path.split(path)
         _splitted = file.split(':')
         _name = _splitted[0]
-        _cuda = False
+        _cuda = True # OVDJE BIRAŠ ZA CUDU-JAKOOO BITNOOO!!!
         if _name == 'ATT_NN':
             _params = model_params_att(_name, _cuda, int(_splitted[1]), 
                                     int(_splitted[2]), int(_splitted[3]), 

@@ -65,7 +65,7 @@ class dump_disk(diskcache.Disk):
     
 
 def get_cache(scope_str):
-    return diskcache.FanoutCache('data-cache/' + scope_str,
+    return diskcache.FanoutCache('data-cache2/' + scope_str,
                        disk = dump_disk,
                        shards=100,
                        timeout=1,
@@ -167,8 +167,6 @@ class ship_dataset:
         # Load model
         assert model_weights_path != None, f"Wrong file path to models weights, got: {model_weights_path}"
 
-        self.get_embedding = evaluate_model(model_weights_path)
-
         # Transform names data
         assert dataset_return in [0, 1, 2, 'train', 'valid', 'test'], f"Wrong dataset descriptor, got: {dataset_return}"
         _name_transform_dict = {'train': 0, 'valid': 1, 'test': 2}
@@ -206,19 +204,24 @@ class ship_dataset:
     def __getitem__(self, ndx):
         # Get sample id
         _sample_path = self.data_list[ndx]
-                           
         _input, _output = get_data_sample(_sample_path)
 
-        _input = torch.from_numpy(np.asarray(_input))
+        #_input = torch.from_numpy(np.asarray(_input))
 
         _output = torch.from_numpy(np.asarray(_output))
+        
+        _name = _sample_path.split('.')[:-1]
+        _name = ''.join(_name+['.npy'])
+
+        _input = np.load(_name)
+        _input = torch.from_numpy(_input)
 
         _input = _input.to(torch.float32)
         _output = _output.to(torch.float32)
+        
         _input = _input.unsqueeze(0)
-        _input = _input.unsqueeze(0)
+        _input = _input.unsqueeze(0) 
 
-        _, _input = self.get_embedding.evaluate(_input)
 
         return (_input, _output, _sample_path)               
 

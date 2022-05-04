@@ -203,7 +203,7 @@ class ship_training_app:
                 * best, boolean, Is this the best model
         """
 
-        _name = f"{self.model_params.name}:{self.model_params.neurons}:" + \
+        _name = f"{self.model_params.name}:" + f"{self.model_params.module}"+ f":{self.model_params.neurons}:" + \
                 f"{self.model_params.opt_name}:" + f"{self.model_params.learning_rate}"
 
 
@@ -249,10 +249,8 @@ class ship_training_app:
         """
         Function that exports model's training and validation metrics to dictionary
         """
-        _writer = pd.ExcelWriter("Results/"+  f"{self.model_params.name}:{self.model_params.blocks}:{self.model_params.heads}:" + 
-                f"{self.model_params.emb_scale}:{self.model_params.heads_shape}" + 
-                f"_{self.model_params.aug_model_name}_{self.model_params.opt_name}:" +  
-                f"{self.model_params.learning_rate}_{best_epoch}_mse:{best_score:5f}.xlsx", engine= 'xlsxwriter')
+        _writer = pd.ExcelWriter("Results/"+  f"{self.model_params.name}:" + f"{self.model_params.module}"+ f":{self.model_params.neurons}:" + \
+                f"{self.model_params.opt_name}:" + f"{self.model_params.learning_rate}.xlsx", engine= 'xlsxwriter')
 
         # Generate dataframes
         _df_train = pd.DataFrame.from_dict(training_dict)
