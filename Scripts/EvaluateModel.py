@@ -17,6 +17,11 @@ model_params_att = namedtuple(
     'model_params_att',
     'name, gpu, blocks, heads, emb_scale, num_emb, heads_shape')
 
+model_params_head = namedtuple(
+    'model_params',
+    'name, gpu, neurons, module',
+)
+
 class evaluate_model():
     """
     Class for models evaluation
@@ -38,11 +43,12 @@ class evaluate_model():
         self.model = self.init_model()
         
         self.__load_weights(weights_path)
+        self.model.eval()
 
 
     def init_model(self):
 
-        assert self.model_params.name in ["CNN_REG", "MLSTM_CNN", "SP_NN", "ATT_NN"], f"Wrong model name, got: {self.model_params.name}"
+        assert self.model_params.name in ["CNN_REG", "MLSTM_CNN", "SP_NN", "ATT_NN", "HEAD_NN"], f"Wrong model name, got: {self.model_params.name}"
         print("**************************************")
         print(f"USING MODEL: {self.model_params.name}")
 
@@ -61,6 +67,9 @@ class evaluate_model():
             _model = ATT_NN(self.model_params.blocks, self.model_params.heads, self.model_params.emb_scale,
                             self.model_params.num_emb, self.model_params.heads_shape)
 
+        if self.model_params.name == 'HEAD_NN':
+            _model = HEAD_NN(self.model_params.neurons)
+
         if self.model_params.gpu:
             print(f"USING GPU: {self.device}")
             _model = _model.to(self.device)
@@ -74,6 +83,11 @@ class evaluate_model():
         _splitted = file.split(':')
         _name = _splitted[0]
         _cuda = True # OVDJE BIRAŠ ZA CUDU-JAKOOO BITNOOO!!!
+        
+        if _name == 'HEAD_NN':
+            _params = model_params_head(_name, _cuda,  ast.literal_eval(_splitted[2]), _splitted[1])
+            return _params
+        
         if _name == 'ATT_NN':
             _params = model_params_att(_name, _cuda, int(_splitted[1]), 
                                     int(_splitted[2]), int(_splitted[3]), 
@@ -100,11 +114,27 @@ class evaluate_model():
 
     
     def evaluate(self, sample):
+        self.model.eval()
+
         with torch.no_grad():
-            self.model.eval()
             _sample = sample.to(self.device)
             _prediction = self.model(_sample)
         return _prediction
+
+    def evaluate_dropout(self, sample): 
+        self.model.train()
+        for m in self.model.modules():
+            if isinstance(m, nn.BatchNorm1d):
+                m.eval()
+        for m in self.model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.eval()
+
+        with torch.no_grad():
+            _sample = sample.to(self.device)
+            _prediction = self.model(_sample)
+        return _prediction
+
 
 
     def evalaute_and_export(self, dl_valid, dl_test):
@@ -154,7 +184,7 @@ class evaluate_model():
         for _i,_batch in enumerate(dl_test):
             print(f"Test: {_i}", end = '\r')
             _input, _output, _info = _batch
-            _predictions = self.__evaluate(_input)
+            _predictions = self.evaluate(_input)
             if self.model_params.name == 'ATT_NN':
                 _predictions, _ = self.evaluate(_input)
             else:
@@ -192,6 +222,88 @@ class evaluate_model():
         _df_test.to_excel(_writer, sheet_name="Test", index = False)
         _writer.save() 
 
+    
+    def evalaute_and_export_HEAD(self, dl_valid, dl_test):
+        # Dictionaries
+        _validation_dict = {'True': [], 'Pred': [], 'mse': [], 'mae': []}
+
+        _test_dict = {'True': [], 'Pred': [], 'mse': [], 'mae': []}
+
+        # Validation
+        for _i, _batch in enumerate(dl_valid):
+            print(f"Validation: {_i}", end = '\r')
+            _input, _output, _info = _batch
+
+            #_input = torch.squeeze(_input, dim = 0)
+            #_input = torch.squeeze(_input, dim = 0)
+
+            if self.model_params.name == 'ATT_NN':
+                _predictions, _ = self.evaluate(_input)
+            else:
+                _predictions = self.evaluate(_input)
+            
+            if self.model_params.gpu:
+                _output = _output.to('cpu')
+                _predictions = _predictions.to('cpu')
+
+            _o = _output[0].detach().numpy()
+            _p = _predictions[0].detach().numpy()
+
+            if self.model_params.module == 'Hs':
+                _o = _o[0]
+            
+            if self.model_params.module == 'Tz':
+                _o = _o[1]
+            
+            if self.model_params.module == 'Dp':
+                _o = _o[2]
+            
+            _validation_dict['True'].append(_o)
+            _validation_dict['Pred'].append(_p)
+            _validation_dict['mse'].append(np.square(np.subtract(_o, _p)))
+            _validation_dict['mae'].append(np.abs((np.subtract(_o, _p))))
+                                        
+        # Test
+        for _i,_batch in enumerate(dl_test):
+            print(f"Test: {_i}", end = '\r')
+            _input, _output, _info = _batch
+            _predictions = self.evaluate(_input)
+            if self.model_params.name == 'ATT_NN':
+                _predictions, _ = self.evaluate(_input)
+            else:
+                _predictions = self.evaluate(_input)
+            
+            if self.model_params.gpu:
+                _output = _output.to('cpu')
+                _predictions = _predictions.to('cpu')
+            
+            _o = _output[0].detach().numpy()
+            _p = _predictions[0].detach().numpy()
+            
+            if self.model_params.module == 'Hs':
+                _o = _o[0]
+            
+            if self.model_params.module == 'Tz':
+                _o = _o[1]
+            
+            if self.model_params.module == 'Dp':
+                _o = _o[2]
+            
+
+            _test_dict['True'].append(_o)
+            _test_dict['Pred'].append(_p)
+            _test_dict['mse'].append(np.square(np.subtract(_o, _p)))
+            _test_dict['mae'].append(np.abs((np.subtract(_o, _p))))
+
+        
+        _writer = pd.ExcelWriter(self.model_params.name+"-"+self.model_params.module+ "-results.xlsx", engine='xlsxwriter')
+        # Generate dataframes
+        _df_test = pd.DataFrame.from_dict(_test_dict)
+        _df_valid = pd.DataFrame.from_dict(_validation_dict)
+
+        _df_valid.to_excel(_writer, sheet_name="Validation", index = False)
+        _df_test.to_excel(_writer, sheet_name="Test", index = False)
+        _writer.save()
 
 def return_top_k(path: str, k: int)-> dict:
     """

@@ -1,7 +1,6 @@
 from collections import namedtuple
 import torch
 from Models import *
-from AugmentationModel import *
 import numpy as np
 import datetime
 import pandas as pd
@@ -249,8 +248,7 @@ class ship_training_app:
         """
         Function that exports model's training and validation metrics to dictionary
         """
-        _writer = pd.ExcelWriter("Results/"+  f"{self.model_params.name}:" + f"{self.model_params.module}"+ f":{self.model_params.neurons}:" + \
-                f"{self.model_params.opt_name}:" + f"{self.model_params.learning_rate}.xlsx", engine= 'xlsxwriter')
+        _writer = pd.ExcelWriter("Results/"+  f"{self.model_params.name}:" + f"{self.model_params.module}"+ f":{self.model_params.neurons}_" + f"{self.model_params.opt_name}:" + f"{self.model_params.learning_rate}" + f"_{best_epoch}" + f"_mse:{best_score:5f}"+".xlsx", engine= 'xlsxwriter')
 
         # Generate dataframes
         _df_train = pd.DataFrame.from_dict(training_dict)

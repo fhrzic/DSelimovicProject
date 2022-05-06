@@ -212,15 +212,14 @@ class ship_dataset:
         
         _name = _sample_path.split('.')[:-1]
         _name = ''.join(_name+['.npy'])
-
         _input = np.load(_name)
         _input = torch.from_numpy(_input)
 
         _input = _input.to(torch.float32)
         _output = _output.to(torch.float32)
         
-        _input = _input.unsqueeze(0)
-        _input = _input.unsqueeze(0) 
+        #_input = _input.unsqueeze(0)
+        #_input = _input.unsqueeze(0) 
 
 
         return (_input, _output, _sample_path)               

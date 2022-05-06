@@ -421,17 +421,26 @@ class HEAD_NN(nn.Module):
         # Conv layer to flatten
         self.dense_1 = torch.nn.Linear(self.input_neurons, number_of_neurons[0])
         self.dense_2 = torch.nn.Linear(number_of_neurons[0], number_of_neurons[1])
-        self.dense_3 = torch.nn.Linear(number_of_neurons[1], 1)
+        self.dense_3 = torch.nn.Linear(number_of_neurons[1], number_of_neurons[2])
+        self.dense_4 = torch.nn.Linear(number_of_neurons[2], number_of_neurons[3])
+        self.dense_5 = torch.nn.Linear(number_of_neurons[3], 1)
 
-        self.a_1 = torch.nn.Tanh()
-        self.a_2 = torch.nn.Tanh()
-        self.a_3 = torch.nn.Sigmoid()
+        self.a_1 = torch.nn.ReLU()
+        self.a_2 = torch.nn.ReLU()
+        self.a_3 = torch.nn.ReLU()
+        self.a_4 = torch.nn.ReLU()
+        self.a_5 = torch.nn.ReLU()
 
         self.drop_1 = torch.nn.Dropout(p = 0.1)
         self.drop_2 = torch.nn.Dropout(p = 0.1)
-
+        self.drop_3 = torch.nn.Dropout(p = 0.1)
+        self.drop_4 = torch.nn.Dropout(p = 0.1)
+        
+        
         self.bn_1 = torch.nn.BatchNorm1d(number_of_neurons[0])
         self.bn_2 = torch.nn.BatchNorm1d(number_of_neurons[1])
+        self.bn_3 = torch.nn.BatchNorm1d(number_of_neurons[2])
+        self.bn_4 = torch.nn.BatchNorm1d(number_of_neurons[3])
 
     def forward(self, x):
         _out = torch.squeeze(x, dim = 2)
@@ -450,8 +459,20 @@ class HEAD_NN(nn.Module):
         _out = self.bn_2(_out)
         _out = self.drop_2(_out)
         
+        # Third block
         _out = self.dense_3(_out)
         _out = self.a_3(_out)
+        _out = self.bn_3(_out)
+        _out = self.drop_3(_out)
+        
+        # Fourth block
+        _out = self.dense_4(_out)
+        _out = self.a_4(_out)
+        _out = self.bn_4(_out)
+        _out = self.drop_4(_out)
+        
+        _out = self.dense_5(_out)
+        _out = self.a_5(_out)
 
         _out = torch.squeeze(_out, dim = 1)
         return _out
